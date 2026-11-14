@@ -39,3 +39,29 @@ PUB400 (IBM i 7.5), 2026-11-15, QTEMP only; published result
 - Consequence: no trigger can be created, fired or seen in the catalog on
   PUB400 with this user. The IBM i tests need another system, or `*USE` on
   `QSYS/ADDPFTRG` (and the trigger work in a library) from the PUB400 admins.
+
+## The authority on ADDPFTRG (`probes/qtemp_trigger_authority.py`)
+
+PUB400 (IBM i 7.5), 2026-11-15, read-only; published result
+`probes/results/qtemp_trigger_authority.json`. A follow-up to the SQL0552
+above, after the maintainer's own checks showed `QSYS/ADDPFTRG` with `*PUBLIC
+*EXCLUDE`, secured by the authorization list `TRIGGER`, whose `*PUBLIC` is
+`*USE`.
+
+- **The effective check refuses it:** `CHKOBJ OBJ(QSYS/ADDPFTRG) OBJTYPE(*CMD)
+  AUT(*USE)` (through `QSYS2.QCMDEXC`) fails with `CPF9802 - Not authorized to
+  object ADDPFTRG in QSYS`; the same check passes for `CHGPFTRG` and
+  `RMVPFTRG`. `CHKOBJ` only checks; it changes nothing.
+- The authorization list `TRIGGER` (owner `QSECOFR`) shows the user one entry:
+  `*PUBLIC *USE` (`QSYS2.AUTHORIZATION_LIST_USER_INFO` and
+  `OBJECT_PRIVILEGES`); the user is not on it by name, as far as the user can
+  see.
+- So the list's `*PUBLIC *USE` does not reach this user. That matches IBM i's
+  authority checking, where an object's own `*PUBLIC` (here `*EXCLUDE`) is
+  used unless it is `*AUTL`; the list then grants `ADDPFTRG` only to the
+  profiles named on it. The `CHKOBJ` result is the fact; the rule is the
+  explanation.
+- `QSYS2.OBJECT_STATISTICS` has no column `AUTHORIZATION_LIST` on this
+  release (SQL0206); the first query of the probe recorded that error.
+- What would make triggers work on PUB400: the admins add the user to the
+  authorization list `TRIGGER` (or grant `*USE` on `QSYS/ADDPFTRG`).
