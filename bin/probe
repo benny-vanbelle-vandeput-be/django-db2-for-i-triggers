@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# bin/probe: run one IBM i probe by name, through the PUB400 lock.
+#
+#   bin/probe --list             the qtemp_ and lib_ probes (no connection)
+#   bin/probe qtemp_<topic> [-- <probe options>]
+#                                a probe that only reads, or writes only in QTEMP
+#   bin/probe --approved <link> lib_<topic> [--execute] [-- <probe options>]
+#                                a probe that changes the IBM i outside QTEMP: only with
+#                                the maintainer's approval comment for that probe, checked
+#                                on GitHub (scripts/probe_approval.py); dry run without
+#                                --execute; the link is stored with the result
+#   bin/probe --wait <name>      queue behind a running PUB400 job (either project)
+#   bin/probe --dry-run <name>   print the command, run nothing
+#   bin/probe --publish <file>   copy a result (test-results/probes/<probe>-<utc>.json)
+#                                to probes/results/<probe>.json without host, user
+#                                or library names (scripts/publish_probe_result.py)
+#   bin/probe --help
+#
+# Adapted from django-db2-for-i (bin/probe), without its probes/run.py set.
+# Results: test-results/probes/ (gitignored); publish the ones a decision
+# rests on (CLAUDE.md).
+
+source "$(dirname "$0")/_common.sh"
+common_args "$@"
+
+probes() {
+    local file
+    for file in "$ROOT"/probes/qtemp_*.py "$ROOT"/probes/lib_*.py; do
+        [ -f "$file" ] || continue
+        file=${file##*/}
+        echo "${file%.py}"
+    done
+}
+
+if [ "${ARGS[0]:-}" = --publish ]; then
+    [ "${#ARGS[@]}" = 2 ] || die "--publish needs one result file"
+    file=${ARGS[1]}
+    file=${file#"$ROOT"/}
+    [ -f "$ROOT/$file" ] || [ "$DRY_RUN" = 1 ] || die "no such result: $file"
+    container uv run --no-project python scripts/publish_probe_result.py "$file"
+    exit
+fi
+approved=""
+name=""
+execute=""
+extra=()
+i=0
+while [ "$i" -lt "${#ARGS[@]}" ]; do
+    arg=${ARGS[$i]}
+    case $arg in
+        --list)
+            probes
+            exit 0
+            ;;
+        --approved)
+            i=$((i + 1))
+            approved=${ARGS[$i]:-}
+            [ -n "$approved" ] || die "--approved needs the link to the approval comment"
+            ;;
+        --execute)
+            execute=1
+            extra+=("$arg")
+            ;;
+        --)
+            # The rest goes to the probe itself.
+            extra+=("${ARGS[@]:$((i + 1))}")
+            break
+            ;;
+        -*) die "unknown argument: $arg (see --help)" ;;
+        *)
+            [ -z "$name" ] || die "one probe per run"
+            name=$arg
+            ;;
+    esac
+    i=$((i + 1))
+done
+[ -n "$name" ] || die "name a probe (bin/probe --list)"
+probes | grep -qx "$name" || die "unknown probe: $name (bin/probe --list)"
+case $name in
+    lib_*)
+        [ -n "$approved" ] \
+            || die "$name changes the IBM i outside QTEMP: it needs --approved <link to the maintainer's approval comment for this probe> (CLAUDE.md)"
+        if [ "$DRY_RUN" = 1 ]; then
+            approver="<checked on GitHub>"
+        else
+            approver=$(python3 "$ROOT/scripts/probe_approval.py" "$approved") \
+                || die "the approval could not be confirmed; nothing was run"
+        fi
+        pub400 probe_lib "$name" --approved "$approved" --approved-by "$approver" ${extra[@]+"${extra[@]}"}
+        ;;
+    qtemp_*)
+        [ -z "$approved" ] && [ -z "$execute" ] || die "--approved and --execute are for lib_ probes only"
+        pub400 probe_qtemp "$name" ${extra[@]+"${extra[@]}"}
+        ;;
+esac
