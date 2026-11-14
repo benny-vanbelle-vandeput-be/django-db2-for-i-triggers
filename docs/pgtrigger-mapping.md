@@ -79,7 +79,10 @@ documented), **n/a** (PostgreSQL only).
 ## Db2 for i specifics to settle in phase 0
 
 - Who may create triggers: SQL0552 on PUB400 in the user library (backend
-  `IBMI_NOTES.md`); the authority needed (`ADDPFTRG`, `*ALTER`, `*OBJMGT`).
+  `IBMI_NOTES.md`) **and in QTEMP**; `CREATE TRIGGER` needs `*USE` on the
+  `ADDPFTRG` command, which the PUB400 user lacks (`docs/IBMI_NOTES.md`,
+  `qtemp_create_trigger`, 2026-11-15). Still open: the authority on the file
+  and library once `ADDPFTRG` is allowed.
 - The trigger program: an SQL trigger is a `*PGM` object; its library and its
   system name; what `DROP TABLE` and `RENAME TABLE` do to it.
 - The limits: triggers per table, per event; the size of the body.
