@@ -26,7 +26,7 @@ documented), **n/a** (PostgreSQL only).
 | `func=` / `pgtrigger.Func` with `{meta}`, `{fields}`, `{columns}` | the function body, templated | the trigger body, templated the same way | planned (phase 1) |
 | `declare=` | variables in the function | `DECLARE` in the body | to probe |
 | installation through migrations | `makemigrations` / `migrate` | the same (`AddTrigger`, `RemoveTrigger`) | planned (phase 3) |
-| `PGTRIGGER_INSTALL_ON_MIGRATE`, `PGTRIGGER_MIGRATIONS`, `PGTRIGGER_MODEL_META` and the other settings | settings | the same names with `DB2ITRIGGER_` | planned |
+| `PGTRIGGER_INSTALL_ON_MIGRATE`, `PGTRIGGER_MIGRATIONS`, `PGTRIGGER_MODEL_META` and the other settings | settings | the same names with a prefix of their own (open, phase 1) | planned |
 | the trigger name `pgtrigger_<name>_<hash>` | unique name, hash for outdated detection | name plus a hash; where the hash is stored is open (`COMMENT ON TRIGGER`, `LABEL ON TRIGGER`, `SYSTRIGGERS` columns) | to probe |
 | schemas (`search_path`) | the trigger in the table's schema | the trigger in the table's library; the trigger program's library and system name | to probe |
 
@@ -65,7 +65,7 @@ documented), **n/a** (PostgreSQL only).
 
 | pgtrigger | Db2 for i | Status |
 |---|---|---|
-| `manage.py pgtrigger ls` (installed, outdated, orphaned, disabled) | `manage.py db2itrigger ls`, from `QSYS2.SYSTRIGGERS` | to probe (the catalog columns) |
+| `manage.py pgtrigger ls` (installed, outdated, orphaned, disabled) | `manage.py django_db2_for_i_triggers ls`, from `QSYS2.SYSTRIGGERS` | to probe (the catalog columns) |
 | `install`, `uninstall`, `enable`, `disable`, `prune` | the same subcommands | planned |
 
 ## Database setups
