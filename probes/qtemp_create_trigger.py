@@ -11,7 +11,8 @@ write, and records what happens:
    authorities on the trigger commands ``QSYS/ADDPFTRG``, ``RMVPFTRG`` and
    ``CHGPFTRG`` (``QSYS2.OBJECT_PRIVILEGES``).
 3. Two tables in QTEMP: ``DJT_ORDER`` (the trigger table) and ``DJT_LOG`` (what
-   an AFTER trigger writes).
+   an AFTER trigger writes), without constraints: QTEMP tables take no
+   ``PRIMARY KEY``, ``UNIQUE`` or ``CHECK`` (SQL7008, backend docs/IBMI_NOTES.md).
 4. ``CREATE TRIGGER`` in QTEMP, from the simplest form to the forms the library
    needs; each one is tried even when an earlier one failed, so a refusal can be
    told apart from a syntax error:
@@ -85,7 +86,7 @@ JOBLOG_SINCE = (
 TABLES = [
     (
         "create DJT_ORDER",
-        "CREATE TABLE QTEMP.DJT_ORDER (ID INTEGER NOT NULL PRIMARY KEY, "
+        "CREATE TABLE QTEMP.DJT_ORDER (ID INTEGER NOT NULL, "
         "STATUS VARCHAR(10) NOT NULL, N INTEGER NOT NULL DEFAULT 0)",
     ),
     (
