@@ -1,0 +1,222 @@
+{
+  "probe": "qtemp_create_trigger",
+  "utc": "20261114T233439Z",
+  "host": "<HOST>",
+  "ssl": true,
+  "scope": "QTEMP only (two tables, up to four triggers); reads catalogs",
+  "session": {
+    "label": "session",
+    "sql": "SELECT CURRENT USER AS CURRENT_USER, QSYS2.JOB_NAME AS JOB_NAME, OS_VERSION, OS_RELEASE FROM SYSIBMADM.ENV_SYS_INFO",
+    "params": [],
+    "ok": true,
+    "rows": [
+      {
+        "CURRENT_USER": "<USER>",
+        "JOB_NAME": "049850/QUSER/QZDASSINIT",
+        "OS_VERSION": "7",
+        "OS_RELEASE": "5"
+      }
+    ]
+  },
+  "user_info": {
+    "label": "user (QSYS2.USER_INFO)",
+    "sql": "SELECT AUTHORIZATION_NAME, USER_CLASS_NAME, SPECIAL_AUTHORITIES, GROUP_PROFILE_NAME, SUPPLEMENTAL_GROUP_LIST FROM QSYS2.USER_INFO WHERE AUTHORIZATION_NAME = CURRENT USER",
+    "params": [],
+    "ok": true,
+    "rows": [
+      {
+        "AUTHORIZATION_NAME": "<USER>",
+        "USER_CLASS_NAME": "*PGMR",
+        "SPECIAL_AUTHORITIES": null,
+        "GROUP_PROFILE_NAME": "*NONE",
+        "SUPPLEMENTAL_GROUP_LIST": null
+      }
+    ]
+  },
+  "command_privileges": {
+    "label": "trigger commands (QSYS2.OBJECT_PRIVILEGES)",
+    "sql": "SELECT SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME, OBJECT_AUTHORITY FROM QSYS2.OBJECT_PRIVILEGES WHERE SYSTEM_OBJECT_SCHEMA = 'QSYS' AND OBJECT_TYPE = '*CMD' AND SYSTEM_OBJECT_NAME IN ('ADDPFTRG', 'RMVPFTRG', 'CHGPFTRG') ORDER BY SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME",
+    "params": [],
+    "ok": true,
+    "rows": [
+      {
+        "SYSTEM_OBJECT_NAME": "CHGPFTRG",
+        "AUTHORIZATION_NAME": "*PUBLIC",
+        "OBJECT_AUTHORITY": "*USE"
+      },
+      {
+        "SYSTEM_OBJECT_NAME": "RMVPFTRG",
+        "AUTHORIZATION_NAME": "*PUBLIC",
+        "OBJECT_AUTHORITY": "*USE"
+      }
+    ]
+  },
+  "tables": [
+    {
+      "label": "create DJT_ORDER",
+      "sql": "CREATE TABLE QTEMP.DJT_ORDER (ID INTEGER NOT NULL, STATUS VARCHAR(10) NOT NULL, N INTEGER NOT NULL DEFAULT 0)",
+      "params": [],
+      "ok": true,
+      "rowcount": 0
+    },
+    {
+      "label": "create DJT_LOG",
+      "sql": "CREATE TABLE QTEMP.DJT_LOG (ID INTEGER NOT NULL, ACTION VARCHAR(10) NOT NULL)",
+      "params": [],
+      "ok": true,
+      "rowcount": 0
+    }
+  ],
+  "triggers": {
+    "minimal": {
+      "label": "minimal",
+      "sql": "CREATE TRIGGER QTEMP.DJT_MIN AFTER INSERT ON QTEMP.DJT_ORDER FOR EACH ROW MODE DB2ROW INSERT INTO QTEMP.DJT_LOG VALUES (0, 'minimal')",
+      "params": [],
+      "ok": false,
+      "sqlstate": "42000",
+      "message": "[42000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0552 - Not authorized to CREATE TRIGGER. (-552) (SQLExecDirectW)",
+      "sqlcode": "SQL0552",
+      "joblog": [
+        {
+          "ORDINAL_POSITION": 5,
+          "MESSAGE_ID": "SQL0552",
+          "MESSAGE_TYPE": "DIAGNOSTIC",
+          "SEVERITY": 30,
+          "MESSAGE_TEXT": "Not authorized to CREATE TRIGGER.",
+          "MESSAGE_SECOND_LEVEL_TEXT": "&N Cause . . . . . :   The operation cannot be performed without the required authority. &P -- CREATE TABLE requires *USE authority to the CRTPF command. &P -- CREATE VIEW or CREATE INDEX requires *USE authority to the CRTLF command. &P -- CREATE ALIAS requires *USE authority to the CRTDDMF command. &P -- CREATE SCHEMA requires *USE authority to the CRTLIB command. &P -- ALTER TABLE requires *USE authority to the ADDPFCST command in order to add constraints, and *USE authority to the RMVPFCST command in order to drop constraints. &P -- ALTER TRIGGER requires *USE authority to the CHGPFTRG command. &P -- CREATE PROCEDURE or CREATE FUNCTION requires *OBJOPR and *ADD authority to the catalog table SYSROUTINES in QSYS2. &P -- DROP PROCEDURE or DROP FUNCTION requires *OBJOPR and *DLT authority to the catalog table SYSPARMS in QSYS2. &P -- CREATE TYPE requires *OBJOPR and *ADD authority to the catalog table SYSTYPES in QSYS2. &P -- DROP TYPE requires *OBJOPR and *DLT authority to the catalog table SYSTYPES in QSYS2. &P -- CREATE TRIGGER requires *USE authority to the ADDPFTRG command. &P -- DROP TRIGGER requires *USE authority to the RMVPFTRG command. &P -- CREATE SEQUENCE requires *USE authority to the CRTDTAARA command. &P -- DROP SEQUENCE requires *USE authority to the DLTDTAARA command. &P -- ALTER SEQUENCE requires *USE authority to the RTVDTAARA and CRTDTAARA commands. &P -- The COMMENT ON statements for procedures, functions, types, triggers and sequences require *OBJOPR, *READ, and *UPD authority to the catalog table associated with the object. &P -- SET SESSION AUTHORIZATION requires that the authorization ID associated with the statement has *ALLOBJ special authority. &P -- SET CURRENT DEGREE and the QSYS2/RESET_ENVIRONMENTAL_LIMITS procedure require that the authorization ID associated with the statement has *JOBCTL special authority or be authorized to the QIBM_DB_SQLADM function.  &P -- CREATE, ALTER, DROP, LABEL ON and COMMENT ON of a MASK or PERMISSION requires that the authorization ID associated with the statement be authorized to the QIBM_DB_SECADM function.  The same authorization is required to RENAME, DROP or delete an object that is referenced by a mask or permission and to CREATE, DROP, or ALTER a secure TRIGGER or FUNCTION. &N Recovery  . . . :   Obtain authority from the security officer and try the operation again. &P Authorization to the QIBM_DB_SQLADM and QIBM_DB_SECADM functions can be handled by Application Administration in System i Navigator.  The Change Function Usage (CHGFCNUSG) command can also be used to allow or deny use of the function. For example: CHGFCNUSG FCNID(QIBM_DB_SQLADM) USER(xxxxx) USAGE(*ALLOWED)."
+        }
+      ]
+    },
+    "after_insert": {
+      "label": "after_insert",
+      "sql": "CREATE TRIGGER QTEMP.DJT_AINS AFTER INSERT ON QTEMP.DJT_ORDER REFERENCING NEW AS N FOR EACH ROW MODE DB2ROW BEGIN ATOMIC INSERT INTO QTEMP.DJT_LOG VALUES (N.ID, 'insert'); END",
+      "params": [],
+      "ok": false,
+      "sqlstate": "42000",
+      "message": "[42000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0552 - Not authorized to CREATE TRIGGER. (-552) (SQLExecDirectW)",
+      "sqlcode": "SQL0552",
+      "joblog": [
+        {
+          "ORDINAL_POSITION": 6,
+          "MESSAGE_ID": "SQL0552",
+          "MESSAGE_TYPE": "DIAGNOSTIC",
+          "SEVERITY": 30,
+          "MESSAGE_TEXT": "Not authorized to CREATE TRIGGER.",
+          "MESSAGE_SECOND_LEVEL_TEXT": "&N Cause . . . . . :   The operation cannot be performed without the required authority. &P -- CREATE TABLE requires *USE authority to the CRTPF command. &P -- CREATE VIEW or CREATE INDEX requires *USE authority to the CRTLF command. &P -- CREATE ALIAS requires *USE authority to the CRTDDMF command. &P -- CREATE SCHEMA requires *USE authority to the CRTLIB command. &P -- ALTER TABLE requires *USE authority to the ADDPFCST command in order to add constraints, and *USE authority to the RMVPFCST command in order to drop constraints. &P -- ALTER TRIGGER requires *USE authority to the CHGPFTRG command. &P -- CREATE PROCEDURE or CREATE FUNCTION requires *OBJOPR and *ADD authority to the catalog table SYSROUTINES in QSYS2. &P -- DROP PROCEDURE or DROP FUNCTION requires *OBJOPR and *DLT authority to the catalog table SYSPARMS in QSYS2. &P -- CREATE TYPE requires *OBJOPR and *ADD authority to the catalog table SYSTYPES in QSYS2. &P -- DROP TYPE requires *OBJOPR and *DLT authority to the catalog table SYSTYPES in QSYS2. &P -- CREATE TRIGGER requires *USE authority to the ADDPFTRG command. &P -- DROP TRIGGER requires *USE authority to the RMVPFTRG command. &P -- CREATE SEQUENCE requires *USE authority to the CRTDTAARA command. &P -- DROP SEQUENCE requires *USE authority to the DLTDTAARA command. &P -- ALTER SEQUENCE requires *USE authority to the RTVDTAARA and CRTDTAARA commands. &P -- The COMMENT ON statements for procedures, functions, types, triggers and sequences require *OBJOPR, *READ, and *UPD authority to the catalog table associated with the object. &P -- SET SESSION AUTHORIZATION requires that the authorization ID associated with the statement has *ALLOBJ special authority. &P -- SET CURRENT DEGREE and the QSYS2/RESET_ENVIRONMENTAL_LIMITS procedure require that the authorization ID associated with the statement has *JOBCTL special authority or be authorized to the QIBM_DB_SQLADM function.  &P -- CREATE, ALTER, DROP, LABEL ON and COMMENT ON of a MASK or PERMISSION requires that the authorization ID associated with the statement be authorized to the QIBM_DB_SECADM function.  The same authorization is required to RENAME, DROP or delete an object that is referenced by a mask or permission and to CREATE, DROP, or ALTER a secure TRIGGER or FUNCTION. &N Recovery  . . . :   Obtain authority from the security officer and try the operation again. &P Authorization to the QIBM_DB_SQLADM and QIBM_DB_SECADM functions can be handled by Application Administration in System i Navigator.  The Change Function Usage (CHGFCNUSG) command can also be used to allow or deny use of the function. For example: CHGFCNUSG FCNID(QIBM_DB_SQLADM) USER(xxxxx) USAGE(*ALLOWED)."
+        }
+      ]
+    },
+    "read_only": {
+      "label": "read_only",
+      "sql": "CREATE TRIGGER QTEMP.DJT_RO BEFORE UPDATE ON QTEMP.DJT_ORDER REFERENCING OLD AS O NEW AS N FOR EACH ROW MODE DB2ROW WHEN (O.STATUS <> N.STATUS) BEGIN ATOMIC SIGNAL SQLSTATE '75001' SET MESSAGE_TEXT = 'DJT: status is read-only'; END",
+      "params": [],
+      "ok": false,
+      "sqlstate": "42000",
+      "message": "[42000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0552 - Not authorized to CREATE TRIGGER. (-552) (SQLExecDirectW)",
+      "sqlcode": "SQL0552",
+      "joblog": [
+        {
+          "ORDINAL_POSITION": 7,
+          "MESSAGE_ID": "SQL0552",
+          "MESSAGE_TYPE": "DIAGNOSTIC",
+          "SEVERITY": 30,
+          "MESSAGE_TEXT": "Not authorized to CREATE TRIGGER.",
+          "MESSAGE_SECOND_LEVEL_TEXT": "&N Cause . . . . . :   The operation cannot be performed without the required authority. &P -- CREATE TABLE requires *USE authority to the CRTPF command. &P -- CREATE VIEW or CREATE INDEX requires *USE authority to the CRTLF command. &P -- CREATE ALIAS requires *USE authority to the CRTDDMF command. &P -- CREATE SCHEMA requires *USE authority to the CRTLIB command. &P -- ALTER TABLE requires *USE authority to the ADDPFCST command in order to add constraints, and *USE authority to the RMVPFCST command in order to drop constraints. &P -- ALTER TRIGGER requires *USE authority to the CHGPFTRG command. &P -- CREATE PROCEDURE or CREATE FUNCTION requires *OBJOPR and *ADD authority to the catalog table SYSROUTINES in QSYS2. &P -- DROP PROCEDURE or DROP FUNCTION requires *OBJOPR and *DLT authority to the catalog table SYSPARMS in QSYS2. &P -- CREATE TYPE requires *OBJOPR and *ADD authority to the catalog table SYSTYPES in QSYS2. &P -- DROP TYPE requires *OBJOPR and *DLT authority to the catalog table SYSTYPES in QSYS2. &P -- CREATE TRIGGER requires *USE authority to the ADDPFTRG command. &P -- DROP TRIGGER requires *USE authority to the RMVPFTRG command. &P -- CREATE SEQUENCE requires *USE authority to the CRTDTAARA command. &P -- DROP SEQUENCE requires *USE authority to the DLTDTAARA command. &P -- ALTER SEQUENCE requires *USE authority to the RTVDTAARA and CRTDTAARA commands. &P -- The COMMENT ON statements for procedures, functions, types, triggers and sequences require *OBJOPR, *READ, and *UPD authority to the catalog table associated with the object. &P -- SET SESSION AUTHORIZATION requires that the authorization ID associated with the statement has *ALLOBJ special authority. &P -- SET CURRENT DEGREE and the QSYS2/RESET_ENVIRONMENTAL_LIMITS procedure require that the authorization ID associated with the statement has *JOBCTL special authority or be authorized to the QIBM_DB_SQLADM function.  &P -- CREATE, ALTER, DROP, LABEL ON and COMMENT ON of a MASK or PERMISSION requires that the authorization ID associated with the statement be authorized to the QIBM_DB_SECADM function.  The same authorization is required to RENAME, DROP or delete an object that is referenced by a mask or permission and to CREATE, DROP, or ALTER a secure TRIGGER or FUNCTION. &N Recovery  . . . :   Obtain authority from the security officer and try the operation again. &P Authorization to the QIBM_DB_SQLADM and QIBM_DB_SECADM functions can be handled by Application Administration in System i Navigator.  The Change Function Usage (CHGFCNUSG) command can also be used to allow or deny use of the function. For example: CHGFCNUSG FCNID(QIBM_DB_SQLADM) USER(xxxxx) USAGE(*ALLOWED)."
+        }
+      ]
+    },
+    "protect_delete": {
+      "label": "protect_delete",
+      "sql": "CREATE TRIGGER QTEMP.DJT_PDEL BEFORE DELETE ON QTEMP.DJT_ORDER FOR EACH ROW MODE DB2ROW BEGIN ATOMIC SIGNAL SQLSTATE '75002' SET MESSAGE_TEXT = 'DJT: delete is protected'; END",
+      "params": [],
+      "ok": false,
+      "sqlstate": "42000",
+      "message": "[42000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0552 - Not authorized to CREATE TRIGGER. (-552) (SQLExecDirectW)",
+      "sqlcode": "SQL0552",
+      "joblog": [
+        {
+          "ORDINAL_POSITION": 8,
+          "MESSAGE_ID": "SQL0552",
+          "MESSAGE_TYPE": "DIAGNOSTIC",
+          "SEVERITY": 30,
+          "MESSAGE_TEXT": "Not authorized to CREATE TRIGGER.",
+          "MESSAGE_SECOND_LEVEL_TEXT": "&N Cause . . . . . :   The operation cannot be performed without the required authority. &P -- CREATE TABLE requires *USE authority to the CRTPF command. &P -- CREATE VIEW or CREATE INDEX requires *USE authority to the CRTLF command. &P -- CREATE ALIAS requires *USE authority to the CRTDDMF command. &P -- CREATE SCHEMA requires *USE authority to the CRTLIB command. &P -- ALTER TABLE requires *USE authority to the ADDPFCST command in order to add constraints, and *USE authority to the RMVPFCST command in order to drop constraints. &P -- ALTER TRIGGER requires *USE authority to the CHGPFTRG command. &P -- CREATE PROCEDURE or CREATE FUNCTION requires *OBJOPR and *ADD authority to the catalog table SYSROUTINES in QSYS2. &P -- DROP PROCEDURE or DROP FUNCTION requires *OBJOPR and *DLT authority to the catalog table SYSPARMS in QSYS2. &P -- CREATE TYPE requires *OBJOPR and *ADD authority to the catalog table SYSTYPES in QSYS2. &P -- DROP TYPE requires *OBJOPR and *DLT authority to the catalog table SYSTYPES in QSYS2. &P -- CREATE TRIGGER requires *USE authority to the ADDPFTRG command. &P -- DROP TRIGGER requires *USE authority to the RMVPFTRG command. &P -- CREATE SEQUENCE requires *USE authority to the CRTDTAARA command. &P -- DROP SEQUENCE requires *USE authority to the DLTDTAARA command. &P -- ALTER SEQUENCE requires *USE authority to the RTVDTAARA and CRTDTAARA commands. &P -- The COMMENT ON statements for procedures, functions, types, triggers and sequences require *OBJOPR, *READ, and *UPD authority to the catalog table associated with the object. &P -- SET SESSION AUTHORIZATION requires that the authorization ID associated with the statement has *ALLOBJ special authority. &P -- SET CURRENT DEGREE and the QSYS2/RESET_ENVIRONMENTAL_LIMITS procedure require that the authorization ID associated with the statement has *JOBCTL special authority or be authorized to the QIBM_DB_SQLADM function.  &P -- CREATE, ALTER, DROP, LABEL ON and COMMENT ON of a MASK or PERMISSION requires that the authorization ID associated with the statement be authorized to the QIBM_DB_SECADM function.  The same authorization is required to RENAME, DROP or delete an object that is referenced by a mask or permission and to CREATE, DROP, or ALTER a secure TRIGGER or FUNCTION. &N Recovery  . . . :   Obtain authority from the security officer and try the operation again. &P Authorization to the QIBM_DB_SQLADM and QIBM_DB_SECADM functions can be handled by Application Administration in System i Navigator.  The Change Function Usage (CHGFCNUSG) command can also be used to allow or deny use of the function. For example: CHGFCNUSG FCNID(QIBM_DB_SQLADM) USER(xxxxx) USAGE(*ALLOWED)."
+        }
+      ]
+    }
+  },
+  "created": [],
+  "fires": [
+    {
+      "label": "insert a row",
+      "sql": "INSERT INTO QTEMP.DJT_ORDER (ID, STATUS) VALUES (1, 'new')",
+      "params": [],
+      "ok": true,
+      "rowcount": 1,
+      "trigger": null,
+      "expected": "ok",
+      "as_expected": true
+    },
+    {
+      "label": "update N (status unchanged)",
+      "sql": "UPDATE QTEMP.DJT_ORDER SET N = 1 WHERE ID = 1",
+      "params": [],
+      "ok": true,
+      "rowcount": 1,
+      "trigger": "read_only",
+      "expected": "ok",
+      "as_expected": true
+    },
+    {
+      "label": "update STATUS",
+      "sql": "UPDATE QTEMP.DJT_ORDER SET STATUS = 'paid' WHERE ID = 1",
+      "params": [],
+      "ok": true,
+      "rowcount": 1,
+      "trigger": "read_only",
+      "expected": "ok",
+      "as_expected": true
+    },
+    {
+      "label": "delete the row",
+      "sql": "DELETE FROM QTEMP.DJT_ORDER WHERE ID = 1",
+      "params": [],
+      "ok": true,
+      "rowcount": 1,
+      "trigger": "protect_delete",
+      "expected": "ok",
+      "as_expected": true
+    }
+  ],
+  "after": [
+    {
+      "label": "rows in DJT_ORDER",
+      "sql": "SELECT ID, STATUS, N FROM QTEMP.DJT_ORDER ORDER BY ID",
+      "params": [],
+      "ok": true,
+      "rows": []
+    },
+    {
+      "label": "rows in DJT_LOG",
+      "sql": "SELECT ID, ACTION FROM QTEMP.DJT_LOG ORDER BY ID, ACTION",
+      "params": [],
+      "ok": true,
+      "rows": []
+    },
+    {
+      "label": "trigger programs in QTEMP (OBJECT_STATISTICS)",
+      "sql": "SELECT OBJNAME, OBJTYPE, OBJATTRIBUTE, OBJTEXT FROM TABLE(QSYS2.OBJECT_STATISTICS('QTEMP', '*PGM')) X ORDER BY OBJNAME",
+      "params": [],
+      "ok": true,
+      "rows": []
+    },
+    {
+      "label": "catalog (QSYS2.SYSTRIGGERS)",
+      "sql": "SELECT * FROM QSYS2.SYSTRIGGERS WHERE EVENT_OBJECT_SCHEMA = 'QTEMP' ORDER BY TRIGGER_NAME FETCH FIRST 10 ROWS ONLY",
+      "params": [],
+      "ok": true,
+      "rows": []
+    }
+  ],
+  "conclusion": "refused: {'minimal': 'SQL0552', 'after_insert': 'SQL0552', 'read_only': 'SQL0552', 'protect_delete': 'SQL0552'}"
+}

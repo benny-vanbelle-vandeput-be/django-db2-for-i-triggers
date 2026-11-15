@@ -1,0 +1,370 @@
+"""Shared helpers for the IBM i probes.
+
+Copied from django-db2-for-i (probes/_common.py), with this repository's name.
+
+Rules (see CLAUDE.md, "PUB400"):
+- A qtemp_ probe only reads, or writes only in QTEMP (gone when the job ends).
+  A lib_ probe changes a library and runs only with the maintainer's approval.
+- One ODBC connection per run, no retries. A probe of locks or concurrency may
+  open at most three at the same time (the backend's qtemp_connections, #234).
+- The password and the full connection string are never printed or logged.
+
+Settings come from DB2I_* environment variables, which compose injects from
+.env into the "tests" container.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import datetime as dt
+import json
+import os
+import re
+import socket
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+DRIVER = "IBM i Access ODBC Driver"
+LOGIN_TIMEOUT_SECONDS = 10
+TCP_TIMEOUT_SECONDS = 5
+RESULTS_DIR = Path(__file__).resolve().parent.parent / "test-results" / "probes"
+
+# Database host server ports: as-database (plain) and as-database-s (TLS).
+DATABASE_PORT = {False: 8471, True: 9471}
+
+_PASSWORD_LENGTH = re.compile(r"(password length\s*=\s*)\d+", re.IGNORECASE)
+
+EXIT_CONFIG = 1
+EXIT_UNREACHABLE = 2
+EXIT_CONNECT_FAILED = 3
+
+
+# A lib_ probe changes something outside QTEMP and needs the maintainer's
+# approval for that specific probe (CLAUDE.md, "PUB400").
+# bin/probe checks the reference on GitHub (scripts/probe_approval.py) and the
+# nox session probe_lib passes it in these variables; connect() refuses a lib_
+# probe without it, and write_result() stores it with the result.
+APPROVAL_ENV = "DB2I_PROBE_APPROVED"
+APPROVER_ENV = "DB2I_PROBE_APPROVED_BY"
+REPOSITORY = "benny-vanbelle-vandeput-be/django-db2-for-i-triggers"
+APPROVAL_URL = re.compile(
+    rf"^https://github\.com/{re.escape(REPOSITORY)}/(?:pull|issues)/\d+#issuecomment-(\d+)$"
+)
+
+
+def is_lib_probe(script: str) -> bool:
+    return Path(script).name.startswith("lib_")
+
+
+def require_approval(script: str) -> dict[str, str] | None:
+    """The approval of a lib_ probe ({"approved": url, "approved_by": login});
+    None for a qtemp_ probe. Raises ProbeError for a lib_ probe without one."""
+    if not is_lib_probe(script):
+        return None
+    url = os.environ.get(APPROVAL_ENV, "")
+    approver = os.environ.get(APPROVER_ENV, "")
+    if not APPROVAL_URL.match(url) or not approver:
+        raise ProbeError(
+            "approval",
+            f"{Path(script).name} changes the IBM i outside QTEMP: run it only through "
+            "bin/probe --approved <link to the maintainer's approval comment>; nothing was changed",
+            1,
+        )
+    return {"approved": url, "approved_by": approver}
+
+
+class ProbeError(Exception):
+    """A probe run cannot continue. The message is safe to print."""
+
+    def __init__(self, category: str, message: str, exit_code: int = EXIT_CONNECT_FAILED):
+        super().__init__(message)
+        self.category = category
+        self.exit_code = exit_code
+
+
+@dataclasses.dataclass(frozen=True)
+class Settings:
+    host: str
+    user: str
+    password: str = dataclasses.field(repr=False)
+    ssl: bool
+    default_library: str
+    other_library: str
+
+    @classmethod
+    def from_env(cls, need_credentials: bool) -> Settings:
+        env = os.environ
+        required = ["DB2I_HOST"] + (["DB2I_USER", "DB2I_PASSWORD"] if need_credentials else [])
+        missing = [name for name in required if not env.get(name)]
+        if missing:
+            raise ProbeError(
+                "config",
+                f"missing environment variables: {', '.join(missing)} "
+                "(copy .env.example to .env and fill it in)",
+                EXIT_CONFIG,
+            )
+        ssl_value = env.get("DB2I_SSL", "1").strip()
+        if ssl_value not in ("0", "1"):
+            raise ProbeError("config", "DB2I_SSL must be 0 or 1", EXIT_CONFIG)
+        return cls(
+            host=env["DB2I_HOST"].strip(),
+            user=env.get("DB2I_USER", "").strip(),
+            password=env.get("DB2I_PASSWORD", ""),
+            ssl=ssl_value == "1",
+            default_library=env.get("DB2I_DEFAULT_LIBRARY", "").strip().upper(),
+            other_library=env.get("DB2I_OTHER_LIBRARY", "").strip().upper(),
+        )
+
+    @property
+    def database_port(self) -> int:
+        return DATABASE_PORT[self.ssl]
+
+    def scrub(self, text: str) -> str:
+        """Remove the password (and its length) from text that may be printed or stored."""
+        if self.password:
+            text = text.replace(self.password, "***")
+        # CWBSY0002 messages include "Password length = <n>".
+        return _PASSWORD_LENGTH.sub(r"\1***", text)
+
+
+# --- TCP / connection -------------------------------------------------------
+
+
+def tcp_check(host: str, port: int) -> dict[str, Any]:
+    """Open and close a plain TCP connection. No data is sent."""
+    start = time.monotonic()
+    try:
+        with socket.create_connection((host, port), timeout=TCP_TIMEOUT_SECONDS):
+            pass
+    except OSError as exc:
+        return {"port": port, "open": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"port": port, "open": True, "ms": round((time.monotonic() - start) * 1000)}
+
+
+def _odbc_value(value: str) -> str:
+    """Brace-quote an ODBC connection string value (handles ';' and '}')."""
+    return "{" + value.replace("}", "}}") + "}"
+
+
+# Read-only probes: SQL naming (NAM=0), commit mode *NONE (CMT=0), and no
+# extended dynamic SQL packages (XDYNAMIC=0; the driver default 1 creates
+# *SQLPKG objects in QGPL).
+DEFAULT_ATTRIBUTES = {"NAM": "0", "CMT": "0", "XDYNAMIC": "0"}
+
+
+def connect(settings: Settings, attributes: dict[str, str] | None = None, autocommit: bool = True):
+    """Open the run's single ODBC connection. Fails fast; never retries.
+
+    ``attributes`` are extra ODBC connection keywords that override
+    DEFAULT_ATTRIBUTES (e.g. {"CMT": "1", "DBQ": "MYLIB"}).
+    A lib_ probe gets no connection without its approval (require_approval).
+    """
+    require_approval(sys.argv[0])
+    import pyodbc
+
+    preflight = tcp_check(settings.host, settings.database_port)
+    if not preflight["open"]:
+        raise ProbeError(
+            "unreachable",
+            f"{settings.host}:{settings.database_port} is not reachable "
+            f"({preflight['error']}). Check the network or run the backend's reachability probe.",
+            EXIT_UNREACHABLE,
+        )
+
+    parts = [
+        f"DRIVER={_odbc_value(DRIVER)}",
+        f"SYSTEM={settings.host}",
+        f"UID={_odbc_value(settings.user)}",
+        f"PWD={_odbc_value(settings.password)}",
+        f"SSL={int(settings.ssl)}",
+    ]
+    merged = {**DEFAULT_ATTRIBUTES, **(attributes or {})}
+    # Attribute values are plain keywords/numbers/library names, never braced.
+    if any(set(";{}=") & set(f"{key}{value}") for key, value in merged.items()):
+        raise ProbeError("config", "invalid character in connection attributes", EXIT_CONFIG)
+    parts += [f"{key}={value}" for key, value in merged.items()]
+    try:
+        return pyodbc.connect(";".join(parts), timeout=LOGIN_TIMEOUT_SECONDS, autocommit=autocommit)
+    except pyodbc.Error as exc:
+        # "from None": do not chain anything that could carry the connection string.
+        raise classify_connect_error(exc, settings) from None
+
+
+_ADVICE = {
+    "driver_missing": "The ODBC driver is not installed or not registered. "
+    "Run probes in the 'tests' container (docker compose run --rm tests ...).",
+    "tls_certificate": "TLS certificate not trusted. Options: add the issuing CA to the "
+    "image, or set DB2I_SSL=0 deliberately (the password is then sent unencrypted). "
+    "The backend's reachability probe shows the certificate details.",
+    "tls_handshake": "TLS failed before login; this may be a certificate problem. "
+    "The backend's reachability probe checks the certificate independently; run it before "
+    "deciding on DB2I_SSL=0.",
+    "auth": "Sign-on rejected. Check DB2I_USER / DB2I_PASSWORD; repeated failures can "
+    "disable the user profile, so do not retry blindly.",
+    "connection": "The server refused or dropped the connection.",
+    "connect_failed": "Connection failed for an unclassified reason.",
+}
+
+
+def classify_connect_error(exc: Exception, settings: Settings) -> ProbeError:
+    """Map a pyodbc connect error to a category with advice.
+
+    The keyword heuristics are refined from real driver messages, which are
+    recorded in docs/IBMI_NOTES.md. The raw SQLSTATE and (scrubbed) driver
+    message are always included so nothing is hidden by a wrong guess.
+    """
+    args = getattr(exc, "args", ())
+    sqlstate = str(args[0]) if len(args) > 1 else ""
+    message = settings.scrub(str(args[1] if len(args) > 1 else exc))
+    low = message.lower()
+
+    if sqlstate == "IM002" or "can't open lib" in low or "file not found" in low:
+        category = "driver_missing"
+    elif settings.ssl and any(k in low for k in ("certificate", "cert ", "x509", "x.509")):
+        category = "tls_certificate"
+    elif settings.ssl and any(k in low for k in ("ssl", "tls", "gsk", "handshake")):
+        category = "tls_handshake"
+    elif any(k in low for k in ("password", "user id", "user profile", "cwbsy")):
+        category = "auth"
+    elif sqlstate.startswith("08"):
+        category = "connection"
+    else:
+        category = "connect_failed"
+
+    return ProbeError(
+        category,
+        f"{_ADVICE[category]}\n  SQLSTATE: {sqlstate or '-'}\n  driver message: {message}",
+    )
+
+
+# --- Queries ----------------------------------------------------------------
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.rstrip()
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def run_query(conn, label: str, sql: str, params: tuple = ()) -> dict[str, Any]:
+    """Run one read-only query. Errors are captured, never raised."""
+    import pyodbc
+
+    result: dict[str, Any] = {"label": label, "sql": sql, "params": list(params)}
+    try:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, map(_plain, row), strict=True)) for row in cursor.fetchall()]
+        finally:
+            cursor.close()
+    except pyodbc.Error as exc:
+        args = exc.args
+        result.update(
+            ok=False,
+            sqlstate=str(args[0]) if len(args) > 1 else "",
+            message=str(args[1] if len(args) > 1 else exc),
+        )
+        return result
+    result.update(ok=True, rows=rows)
+    return result
+
+
+def run_statement(conn, label: str, sql: str, params: tuple = ()) -> dict[str, Any]:
+    """Run one (possibly changing) statement; record success or the server's error. Never raises."""
+    import pyodbc
+
+    result: dict[str, Any] = {"label": label, "sql": sql, "params": list(params)}
+    cursor = conn.cursor()
+    try:
+        cursor.execute(sql, params)
+        result.update(ok=True, rowcount=cursor.rowcount)
+    except pyodbc.Error as exc:
+        args = exc.args
+        result.update(
+            ok=False,
+            sqlstate=str(args[0]) if len(args) > 1 else "",
+            message=str(args[1] if len(args) > 1 else exc),
+        )
+    finally:
+        cursor.close()
+    status = "ok" if result["ok"] else f"error: {result['sqlstate']} {result['message']}"
+    print(f"\n> [{label}] {sql}\n  {status}")
+    return result
+
+
+def run_values(conn, label: str, sql: str, params: tuple = ()) -> dict[str, Any]:
+    """Run one read-only query; record values (repr), Python types and driver messages.
+
+    Prints the result. Errors are captured, never raised.
+    """
+    import pyodbc
+
+    result: dict[str, Any] = {"label": label, "sql": sql, "params": list(params)}
+    cursor = conn.cursor()
+    try:
+        cursor.execute(sql, params)
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        result.update(
+            ok=True,
+            rows=[
+                {
+                    c: {"repr": repr(v), "type": type(v).__name__}
+                    for c, v in zip(columns, row, strict=True)
+                }
+                for row in rows
+            ],
+            messages=[str(m) for m in getattr(cursor, "messages", []) or []],
+        )
+    except pyodbc.Error as exc:
+        args = exc.args
+        result.update(
+            ok=False,
+            sqlstate=str(args[0]) if len(args) > 1 else "",
+            message=str(args[1] if len(args) > 1 else exc),
+        )
+    finally:
+        cursor.close()
+    print(f"\n# {label}")
+    if not result["ok"]:
+        print(f"  error: {result['sqlstate']} {result['message']}")
+    else:
+        for row in result["rows"]:
+            print("  " + ", ".join(f"{c}={d['repr']} ({d['type']})" for c, d in row.items()))
+        for message in result["messages"]:
+            print(f"  message: {message}")
+    return result
+
+
+# --- Output -----------------------------------------------------------------
+
+
+def print_query(result: dict[str, Any]) -> None:
+    print(f"\n# {result['label']}")
+    if not result["ok"]:
+        print(f"  unavailable: {result['sqlstate']} {result['message']}")
+        return
+    if not result["rows"]:
+        print("  (no rows)")
+    for row in result["rows"]:
+        print("  " + ", ".join(f"{key}={value!r}" for key, value in row.items()))
+
+
+def write_result(name: str, data: dict[str, Any], settings: Settings) -> Path:
+    """Store a probe result as JSON under test-results/probes/ (gitignored)."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    path = RESULTS_DIR / f"{name}-{stamp}.json"
+    payload = {"probe": name, "utc": stamp, "host": settings.host, "ssl": settings.ssl}
+    payload.update(require_approval(sys.argv[0]) or {})
+    payload.update(data)
+    # default=str: parameters may be date/time/Decimal objects.
+    text = json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+    path.write_text(settings.scrub(text) + "\n")
+    return path

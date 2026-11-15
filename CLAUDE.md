@@ -7,15 +7,17 @@ Django models, the way [django-pgtrigger](https://django-pgtrigger.readthedocs.i
 does it for PostgreSQL:
 
 ```python
-import db2itrigger
+import django_db2_for_i_triggers
 
 class Order(models.Model):
     status = models.CharField(max_length=10)
 
     class Meta:
         triggers = [
-            db2itrigger.Protect(name="protect_deletes", operation=db2itrigger.Delete),
-            db2itrigger.ReadOnly(name="status_read_only", fields=["status"]),
+            django_db2_for_i_triggers.Protect(
+                name="protect_deletes", operation=django_db2_for_i_triggers.Delete
+            ),
+            django_db2_for_i_triggers.ReadOnly(name="status_read_only", fields=["status"]),
         ]
 ```
 
@@ -30,9 +32,10 @@ class Order(models.Model):
 - It works only with the backend of the sister project
   [django-db2-for-i](../django-db2-for-i) (`ENGINE = "django_db2_for_i"`); other
   engines are refused with a system check error.
-- Names (proposal, the maintainer confirms in phase 0): distribution
-  `django-db2-for-i-triggers`, import package `db2itrigger` (as `pgtrigger`),
-  app label `db2itrigger`, management command `manage.py db2itrigger`.
+- Names (decided 2026-11-15, docs/DECISIONS.md): distribution
+  `django-db2-for-i-triggers`; import package, app label and management
+  command all `django_db2_for_i_triggers`. The settings prefix is still open
+  (asked in phase 1).
 
 ### Relation to django-pgtrigger
 - django-pgtrigger is BSD-3-Clause (verify the exact license and copyright
@@ -159,7 +162,7 @@ The same as the backend, and they move with it:
 ## 4. Architecture
 
 ```
-db2itrigger/
+django_db2_for_i_triggers/
 ├── __init__.py        # the public API, as pgtrigger's: Trigger, Protect, ReadOnly,
 │                      # SoftDelete, FSM, Composer, Q, F, Condition, Before, After,
 │                      # InsteadOf, Insert, Update, Delete, Row, Statement, ignore, ...
@@ -170,7 +173,7 @@ db2itrigger/
 ├── introspection.py   # installed triggers from QSYS2.SYSTRIGGERS (and SYSTRIGCOL, SYSTRIGDEP)
 ├── migrations.py      # AddTrigger / RemoveTrigger and the autodetector hook
 ├── runtime.py         # ignore(): skipping triggers for one block of code
-├── management/commands/db2itrigger.py
+├── management/commands/django_db2_for_i_triggers.py
 ├── checks.py          # system checks (ENGINE, names, unsupported options)
 ├── compat.py          # the Django-version axis (no django.VERSION checks elsewhere)
 └── apps.py
@@ -186,8 +189,8 @@ Rules:
   check it.
 - A trigger has a stable **hash** of its definition; the installed trigger
   carries it (where Db2 for i can store it: a `COMMENT ON TRIGGER` / `LABEL`,
-  to probe) so `db2itrigger ls` can tell installed, outdated and orphaned
-  triggers apart, as pgtrigger does.
+  to probe) so `django_db2_for_i_triggers ls` can tell installed, outdated and
+  orphaned triggers apart, as pgtrigger does.
 - Trigger names: Db2 for i SQL names (up to 128) plus a system name (10
   characters) for the trigger program; how the system name is chosen and
   kept unique is decided after the phase 0 probes (the backend's system-name
@@ -257,7 +260,7 @@ django-db2-for-i-triggers/
 │   ├── pgtrigger-mapping.md   # every pgtrigger feature and its Db2 for i status
 │   ├── DECISIONS.md, IBMI_NOTES.md, TEST_STATUS.md, WORKFLOW.md, status.toml
 │   └── phases/
-├── db2itrigger/
+├── django_db2_for_i_triggers/
 ├── probes/                    # qtemp_* and lib_* probes; results/
 ├── scripts/                   # pub400.sh, pub400_lock.py (unchanged), classify_pr.py, ...
 └── tests/ (offline/, ibmi/, testapp/, django_settings/)
@@ -291,7 +294,7 @@ module).
       pass an "ignore" flag into a trigger).
 1. **Trigger core.** `Trigger` with raw SQL, `Before`/`After`, `Insert`/`Update`/
    `Delete`, `Row`; install and uninstall; `Protect` and `ReadOnly`;
-   introspection; the `db2itrigger ls / install / uninstall` command.
+   introspection; the `django_db2_for_i_triggers ls / install / uninstall` command.
 2. **Conditions.** `Q`, `F` on `old__` / `new__`, `Condition` with raw SQL,
    `UpdateOf` / `AnyChange` / `AnyDontChange` (as far as Db2 for i allows).
 3. **Migrations.** `Meta.triggers` in migrations (`AddTrigger`,
@@ -307,9 +310,15 @@ module).
 ## 10. Open questions for the maintainer
 
 Ask one at a time, in Dutch, when the work reaches them:
-1. The names: distribution `django-db2-for-i-triggers`, package `db2itrigger`?
-2. The GitHub repository: name and owner (the maintainer creates it), and the
-   machine account's access to it.
+1. ~~The names~~: answered 2026-11-15, see section 1 and docs/DECISIONS.md.
+2. ~~The GitHub repository~~: answered 2026-11-15:
+   `benny-vanbelle-vandeput-be/django-db2-for-i-triggers`, the machine account
+   has write access.
 3. If PUB400 does not allow `CREATE TRIGGER`: which system for the IBM i tests?
-4. Which pgtrigger features matter most for the first release (the order of
-   phases 1–5)?
+   PUB400 does not (SQL0552 also in QTEMP, no `*USE` on `ADDPFTRG`:
+   docs/IBMI_NOTES.md). 2026-11-15: the maintainer decided to go on offline
+   first and ask again later; until then there are no IBM i tests.
+4. ~~Which pgtrigger features matter most~~: answered 2026-11-15: all of
+   conditions, SoftDelete/FSM, `ignore()` and enable/disable/prune; the order
+   of phases 1–5 stays.
+5. The settings prefix (pgtrigger: `PGTRIGGER_*`), in phase 1.

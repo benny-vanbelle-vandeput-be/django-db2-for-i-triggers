@@ -1,0 +1,111 @@
+{
+  "probe": "qtemp_trigger_authority",
+  "utc": "20261114T235630Z",
+  "host": "<HOST>",
+  "ssl": true,
+  "scope": "read-only (catalog views and CHKOBJ)",
+  "queries": [
+    {
+      "label": "command objects (OBJECT_STATISTICS)",
+      "sql": "SELECT OBJNAME, OBJOWNER, AUTHORIZATION_LIST FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS', '*CMD')) X WHERE OBJNAME IN ('ADDPFTRG', 'CHGPFTRG', 'RMVPFTRG') ORDER BY OBJNAME",
+      "params": [],
+      "ok": false,
+      "sqlstate": "42S22",
+      "message": "[42S22] [IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0206 - Column or global variable AUTHORIZATION_LIST not found. (-206) (SQLExecDirectW)"
+    },
+    {
+      "label": "authorities on the commands (OBJECT_PRIVILEGES)",
+      "sql": "SELECT SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME, OBJECT_AUTHORITY, AUTHORIZATION_LIST FROM QSYS2.OBJECT_PRIVILEGES WHERE SYSTEM_OBJECT_SCHEMA = 'QSYS' AND OBJECT_TYPE = '*CMD' AND SYSTEM_OBJECT_NAME IN ('ADDPFTRG', 'CHGPFTRG', 'RMVPFTRG') ORDER BY SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME",
+      "params": [],
+      "ok": true,
+      "rows": [
+        {
+          "SYSTEM_OBJECT_NAME": "CHGPFTRG",
+          "AUTHORIZATION_NAME": "*PUBLIC",
+          "OBJECT_AUTHORITY": "*USE",
+          "AUTHORIZATION_LIST": null
+        },
+        {
+          "SYSTEM_OBJECT_NAME": "RMVPFTRG",
+          "AUTHORIZATION_NAME": "*PUBLIC",
+          "OBJECT_AUTHORITY": "*USE",
+          "AUTHORIZATION_LIST": null
+        }
+      ]
+    },
+    {
+      "label": "authorization list TRIGGER (OBJECT_PRIVILEGES, *AUTL)",
+      "sql": "SELECT SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME, OBJECT_AUTHORITY FROM QSYS2.OBJECT_PRIVILEGES WHERE SYSTEM_OBJECT_SCHEMA = 'QSYS' AND OBJECT_TYPE = '*AUTL' AND SYSTEM_OBJECT_NAME = 'TRIGGER' ORDER BY AUTHORIZATION_NAME",
+      "params": [],
+      "ok": true,
+      "rows": [
+        {
+          "SYSTEM_OBJECT_NAME": "TRIGGER",
+          "AUTHORIZATION_NAME": "*PUBLIC",
+          "OBJECT_AUTHORITY": "*USE"
+        }
+      ]
+    },
+    {
+      "label": "authorization list TRIGGER (AUTHORIZATION_LIST_USER_INFO)",
+      "sql": "SELECT * FROM QSYS2.AUTHORIZATION_LIST_USER_INFO WHERE AUTHORIZATION_LIST = 'TRIGGER' ORDER BY AUTHORIZATION_NAME",
+      "params": [],
+      "ok": true,
+      "rows": [
+        {
+          "AUTHORIZATION_LIST": "TRIGGER",
+          "AUTHORIZATION_NAME": "*PUBLIC",
+          "OBJECT_AUTHORITY": "*USE",
+          "AUTHORIZATION_LIST_MANAGEMENT": "NO",
+          "OWNER": "QSECOFR",
+          "OBJECT_OPERATIONAL": "YES",
+          "OBJECT_MANAGEMENT": "NO",
+          "OBJECT_EXISTENCE": "NO",
+          "OBJECT_ALTER": "NO",
+          "OBJECT_REFERENCE": "NO",
+          "DATA_READ": "YES",
+          "DATA_ADD": "NO",
+          "DATA_UPDATE": "NO",
+          "DATA_DELETE": "NO",
+          "DATA_EXECUTE": "YES",
+          "TEXT_DESCRIPTION": null
+        }
+      ]
+    }
+  ],
+  "chkobj": {
+    "ADDPFTRG": {
+      "label": "CHKOBJ ADDPFTRG *USE",
+      "sql": "CALL QSYS2.QCMDEXC(?)",
+      "params": [
+        "CHKOBJ OBJ(QSYS/ADDPFTRG) OBJTYPE(*CMD) AUT(*USE)"
+      ],
+      "ok": false,
+      "sqlstate": "HY000",
+      "message": "[HY000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]CPF9802 - Not authorized to object ADDPFTRG in QSYS. (-443) (SQLExecDirectW)"
+    },
+    "CHGPFTRG": {
+      "label": "CHKOBJ CHGPFTRG *USE",
+      "sql": "CALL QSYS2.QCMDEXC(?)",
+      "params": [
+        "CHKOBJ OBJ(QSYS/CHGPFTRG) OBJTYPE(*CMD) AUT(*USE)"
+      ],
+      "ok": true,
+      "rowcount": 0
+    },
+    "RMVPFTRG": {
+      "label": "CHKOBJ RMVPFTRG *USE",
+      "sql": "CALL QSYS2.QCMDEXC(?)",
+      "params": [
+        "CHKOBJ OBJ(QSYS/RMVPFTRG) OBJTYPE(*CMD) AUT(*USE)"
+      ],
+      "ok": true,
+      "rowcount": 0
+    }
+  },
+  "conclusion": {
+    "ADDPFTRG": "not authorized: [HY000] [IBM][System i Access ODBC Driver][DB2 for i5/OS]CPF9802 - Not authorized to object ADDPFTRG in QSYS. (-443) (SQLExecDirectW)",
+    "CHGPFTRG": "authorized (*USE)",
+    "RMVPFTRG": "authorized (*USE)"
+  }
+}
