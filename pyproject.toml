@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Database triggers for Django models on Db2 for IBM i, in the style of django-pgtrigger"
 readme = "README.md"
 license = "BSD-3-Clause"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Benny Van Belle" }]
 requires-python = ">=3.12"
 dependencies = [
@@ -52,7 +52,7 @@ path = "django_db2_for_i_triggers/__init__.py"
 allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
-include = ["django_db2_for_i_triggers", "tests", "LICENSE", "README.md", "CHANGELOG.md"]
+include = ["django_db2_for_i_triggers", "tests", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["django_db2_for_i_triggers"]
@@ -75,3 +75,7 @@ line-length = 100
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 # "Python × Django" (a version combination) in docs and their tests.
 allowed-confusables = ["×"]
+
+[tool.ruff.lint.per-file-ignores]
+# Meta.triggers is a list in a class Meta, Django's own idiom (as Meta.indexes).
+"tests/**/*.py" = ["RUF012"]

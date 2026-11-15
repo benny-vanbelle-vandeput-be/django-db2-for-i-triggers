@@ -44,3 +44,57 @@ backend's repository, which this project never does); the full skeleton first
 (`db2i-pub400-`): `scripts/pub400_lock.py` stops and cleans up containers by
 that prefix, so a run of either project also sees the other's containers. The
 probes install only `pyodbc` (no `pyproject.toml` yet).
+
+## 2026-11-15: following django-pgtrigger, and its license
+
+**Decision.** The public API (names, arguments, `Meta.triggers`, the checks of
+the arguments) follows django-pgtrigger 4.17.0, and some of its code and test
+cases are adapted. django-pgtrigger is BSD-3-Clause, "Copyright (c) 2025,
+Ambition" (its `LICENSE`, checked on its 4.17.0 tag). The files with adapted
+parts (`core.py`, `contrib.py`, `tests/offline/test_core.py`) keep that
+notice; `NOTICE` holds its license text and says the project is not
+affiliated with or endorsed by django-pgtrigger (its third clause). The SQL is
+written anew for Db2 for i. The user docs and the README say the library is
+based on it, so models and triggers can be written once for both databases.
+
+**Why.** The maintainer's goal: a project moves between PostgreSQL and Db2 for i
+with as few changes as possible; the same API is the way there.
+
+**Alternatives.** An API of our own (no migration path); copying pgtrigger
+wholesale (its SQL and runtime are PostgreSQL-only).
+
+## 2026-11-15: Meta.triggers, names, system names, Protect's SQLSTATE
+
+- **`Meta.triggers`**: `apps.py` adds `triggers` to Django's `Meta` options when
+  the app module is imported, as pgtrigger and the backend (`db_library`) do.
+  Django imports every app module before any model, so the place in
+  `INSTALLED_APPS` does not matter.
+- **SQL name**: `DJTRG_<NAME>_<HASH>`, the hash five characters of the SHA-1 of
+  `<app>.<Model>:<name>`, upper case (Db2 folds names), at most 128 characters,
+  so a trigger name has at most 116. The prefix lets `ls` and `prune` (later)
+  find this library's triggers, as pgtrigger's `pgtrigger_` prefix does. The
+  trigger is created in the table's library (qualified when `db_table` names one).
+- **System name**: `system_name=` on every trigger (the maintainer's request),
+  written as `PROGRAM NAME` in the option list of `CREATE TRIGGER` (IBM's 7.5
+  documentation); validated with the backend's `SYSTEM_NAME` pattern; E004 when
+  two triggers share one. Without it Db2 for i chooses the program's name.
+  Not yet run on IBM i.
+- **Correlation names `OLD` and `NEW`**, declared for every row-level trigger
+  (`REFERENCING OLD ROW AS OLD NEW ROW AS NEW`), so conditions and bodies
+  written for pgtrigger (`OLD.x`, `NEW.x`) keep their meaning. IBM documents
+  that OLD is null for an insert and NEW for a delete; whether `OLD` and `NEW`
+  are accepted as correlation names is the first thing to run on IBM i.
+- **Protect** signals `SQLSTATE '75001'` (class 7: user-defined) with
+  pgtrigger's message, `Cannot <operation> rows from <table> table`, prefixed
+  with the package name. Which Python exception it becomes is open (a probe of
+  the backend's error mapping).
+- **Refused when declared** (`NotSupportedError`): `Truncate`, `timing`,
+  `Statement`, `InsteadOf`; pgtrigger raises its own argument errors as
+  `ValueError` first, unchanged.
+
+**Why.** Each keeps pgtrigger's behaviour where Db2 for i allows it and says
+plainly where it does not.
+
+**Alternatives.** Short correlation names (`O`, `N`): safe from reserved words,
+but every pgtrigger condition would need rewriting. A generated system name
+for every trigger: possible later; the maintainer asked for an explicit one now.
