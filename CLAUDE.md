@@ -315,6 +315,9 @@ Ask one at a time, in Dutch, when the work reaches them:
    `benny-vanbelle-vandeput-be/django-db2-for-i-triggers`, the machine account
    has write access.
 3. If PUB400 does not allow `CREATE TRIGGER`: which system for the IBM i tests?
+   PUB400 does not (SQL0552 also in QTEMP, no `*USE` on `ADDPFTRG`:
+   docs/IBMI_NOTES.md). 2026-11-15: the maintainer decided to go on offline
+   first and ask again later; until then there are no IBM i tests.
 4. ~~Which pgtrigger features matter most~~: answered 2026-11-15: all of
    conditions, SoftDelete/FSM, `ignore()` and enable/disable/prune; the order
    of phases 1–5 stays.
