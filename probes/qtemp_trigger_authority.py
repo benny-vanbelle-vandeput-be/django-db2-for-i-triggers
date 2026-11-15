@@ -26,7 +26,15 @@ import contextlib
 import sys
 from typing import Any
 
-from _common import ProbeError, Settings, connect, print_query, run_query, run_statement, write_result
+from _common import (
+    ProbeError,
+    Settings,
+    connect,
+    print_query,
+    run_query,
+    run_statement,
+    write_result,
+)
 
 NAME = "qtemp_trigger_authority"
 COMMANDS = ("ADDPFTRG", "CHGPFTRG", "RMVPFTRG")
