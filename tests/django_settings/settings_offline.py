@@ -7,7 +7,7 @@ unresolvable name and the conftest guard refuses ``pyodbc.connect``.
 SECRET_KEY = "offline-tests-not-secret"
 USE_TZ = True
 TIME_ZONE = "UTC"
-INSTALLED_APPS = ["django_db2_for_i", "django_db2_for_i_triggers"]
+INSTALLED_APPS = ["django_db2_for_i", "django_db2_for_i_triggers", "tests.testapp"]
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 DATABASES = {
