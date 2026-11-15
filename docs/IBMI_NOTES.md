@@ -65,3 +65,20 @@ above, after the maintainer's own checks showed `QSYS/ADDPFTRG` with `*PUBLIC
   release (SQL0206); the first query of the probe recorded that error.
 - What would make triggers work on PUB400: the admins add the user to the
   authorization list `TRIGGER` (or grant `*USE` on `QSYS/ADDPFTRG`).
+
+## From IBM's documentation, not yet run (CREATE TRIGGER, IBM i 7.5)
+
+Not probed (no system allows `CREATE TRIGGER` yet); from IBM's `CREATE
+TRIGGER` reference for 7.5, to confirm on IBM i:
+
+- QTEMP cannot be the schema qualifier of a trigger: trigger probes need a
+  library (`lib_` probes with the maintainer's approval).
+- `PROGRAM NAME <name>` in the option list (before `WHEN`) names the trigger
+  program; without it, a trigger name that is not a valid system name, or one
+  whose program name exists, gets a generated system name.
+- `OR REPLACE` is supported; `NOT SECURED` is the default; at most 300 triggers
+  per table.
+- `MODE DB2ROW` fires per row as it is processed, `MODE DB2SQL` (AFTER) after
+  all rows.
+- With several events, OLD is null for an insert and NEW for a delete; only one
+  OLD and one NEW correlation name per trigger.

@@ -14,20 +14,20 @@ documented), **n/a** (PostgreSQL only).
 
 | pgtrigger | What it does on PostgreSQL | Db2 for i | Status |
 |---|---|---|---|
-| `Meta.triggers = [...]` | triggers declared on the model | the same | planned (phase 1) |
-| `pgtrigger.Trigger(name=, when=, operation=, level=, func=, condition=)` | a trigger function plus a trigger | one `CREATE TRIGGER` with the body in SQL PL; no separate function | to probe (`qtemp_create_trigger`) |
+| `Meta.triggers = [...]` | triggers declared on the model | the same | **done** (declaration and SQL; installation in phase 3) |
+| `pgtrigger.Trigger(name=, when=, operation=, level=, func=, condition=)` | a trigger function plus a trigger | one `CREATE TRIGGER` with the body in SQL PL; no separate function; plus `system_name=` (`PROGRAM NAME`) | **done offline**, not run on IBM i (PUB400 refuses `CREATE TRIGGER`) |
 | `when=Before / After` | `BEFORE` / `AFTER` | `BEFORE` / `AFTER` | to probe |
 | `when=InsteadOf` | `INSTEAD OF` on views | `INSTEAD OF` on views | to probe (phase 4) |
 | `operation=Insert / Update / Delete` and `|` | the events, combined | `INSERT OR UPDATE OR DELETE` | to probe |
 | `operation=UpdateOf("field")` | `UPDATE OF col` | `UPDATE OF col` | to probe |
-| `operation=Truncate` | `TRUNCATE` trigger | Db2 for i `TRUNCATE` does not fire delete triggers unless `RESTRICT WHEN DELETE TRIGGERS`; no truncate event | to probe, likely not supported |
+| `operation=Truncate` | `TRUNCATE` trigger | Db2 for i `TRUNCATE` does not fire delete triggers unless `RESTRICT WHEN DELETE TRIGGERS`; no truncate event | **not supported** (`NotSupportedError`) |
 | `level=Row / Statement` | `FOR EACH ROW / STATEMENT` | `FOR EACH ROW`, `FOR EACH STATEMENT` (`REFERENCING OLD TABLE / NEW TABLE`) | to probe |
-| `timing=Immediate / Deferred` (deferrable triggers) | constraint triggers, deferred to commit | none expected | to probe, likely not supported |
-| `func=` / `pgtrigger.Func` with `{meta}`, `{fields}`, `{columns}` | the function body, templated | the trigger body, templated the same way | planned (phase 1) |
-| `declare=` | variables in the function | `DECLARE` in the body | to probe |
+| `timing=Immediate / Deferred` (deferrable triggers) | constraint triggers, deferred to commit | none | **not supported** (`NotSupportedError`) |
+| `func=` / `pgtrigger.Func` with `{meta}`, `{fields}`, `{columns}` | the function body, templated | the trigger body (SQL PL), templated the same way | **done offline** |
+| `declare=` | variables in the function | `DECLARE` in the body | **done offline** |
 | installation through migrations | `makemigrations` / `migrate` | the same (`AddTrigger`, `RemoveTrigger`) | planned (phase 3) |
 | `PGTRIGGER_INSTALL_ON_MIGRATE`, `PGTRIGGER_MIGRATIONS`, `PGTRIGGER_MODEL_META` and the other settings | settings | the same names with a prefix of their own (open, phase 1) | planned |
-| the trigger name `pgtrigger_<name>_<hash>` | unique name, hash for outdated detection | name plus a hash; where the hash is stored is open (`COMMENT ON TRIGGER`, `LABEL ON TRIGGER`, `SYSTRIGGERS` columns) | to probe |
+| the trigger name `pgtrigger_<name>_<hash>` | unique name, hash for outdated detection | `DJTRG_<NAME>_<HASH>` (done); where the definition hash is stored is open (`COMMENT ON TRIGGER`, `LABEL ON TRIGGER`, `SYSTRIGGERS` columns) | name done; hash to probe |
 | schemas (`search_path`) | the trigger in the table's schema | the trigger in the table's library; the trigger program's library and system name | to probe |
 
 ## Conditions
@@ -38,15 +38,15 @@ documented), **n/a** (PostgreSQL only).
 | `pgtrigger.F("old__field")` | a column of the old or new row | to probe |
 | `__df` (is distinct from) lookups | `IS DISTINCT FROM` | to probe |
 | `AnyChange`, `AnyDontChange`, `AllChange`, `AllDontChange` | conditions over many columns | to probe (LOB columns may not be compared) |
-| `pgtrigger.Condition("raw SQL")` | raw `WHEN` | planned |
+| `pgtrigger.Condition("raw SQL")` | raw `WHEN` on `OLD` / `NEW` | **done offline** |
 | conditions on statement-level triggers | PostgreSQL refuses them | to probe |
 
 ## Trigger classes (`contrib`)
 
 | pgtrigger | Db2 for i | Status |
 |---|---|---|
-| `Protect` | `SIGNAL SQLSTATE '7xxxx' SET MESSAGE_TEXT = ...` in a `BEFORE` trigger; which Python exception it becomes depends on the backend's error mapping | to probe |
-| `ReadOnly(fields= / exclude=)` | `Protect` on update with a change condition | to probe |
+| `Protect` | `SIGNAL SQLSTATE '75001' SET MESSAGE_TEXT = ...` in a `BEFORE` trigger (row level); which Python exception it becomes depends on the backend's error mapping | **done offline**; the exception to probe |
+| `ReadOnly(fields= / exclude=)` | `Protect` on update with `OLD.c IS DISTINCT FROM NEW.c OR ...` | **done offline**; `IS DISTINCT FROM` on LOBs to probe |
 | `SoftDelete(field=, value=)` | a `BEFORE DELETE` cannot cancel the delete without an error; PostgreSQL returns `NULL`. Options: an `INSTEAD OF` trigger on a view, or an error plus `UPDATE` | to probe, likely limited |
 | `FSM(field=, transitions=)` | `Protect` with a condition over old and new | to probe |
 | `UpdateSearchVector` | PostgreSQL full-text search | n/a |

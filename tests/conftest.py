@@ -38,3 +38,11 @@ def _forbid_connections_offline(
         raise OfflineConnectionError("offline tests must not open a database connection")
 
     monkeypatch.setattr("pyodbc.connect", refuse)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.getgroup("goldens").addoption(
+        "--update-goldens",
+        action="store_true",
+        help="rewrite golden files from the current SQL (offline tests; never in CI)",
+    )
