@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-db2-for-i-triggers"
+dynamic = ["version"]
+description = "Database triggers for Django models on Db2 for IBM i, in the style of django-pgtrigger"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Benny Van Belle" }]
+requires-python = ">=3.12"
+dependencies = [
+    # The backend, from its git tag: it is on GitHub only for now (CLAUDE.md).
+    # It brings Django and pyodbc with the versions it supports.
+    "django-db2-for-i @ git+https://github.com/benny-vanbelle-vandeput-be/django-db2-for-i@v0.1.0b4",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Database",
+]
+keywords = ["django", "db2", "ibm i", "as400", "iseries", "triggers"]
+
+[project.urls]
+Homepage = "https://github.com/benny-vanbelle-vandeput-be/django-db2-for-i-triggers"
+Source = "https://github.com/benny-vanbelle-vandeput-be/django-db2-for-i-triggers"
+Issues = "https://github.com/benny-vanbelle-vandeput-be/django-db2-for-i-triggers/issues"
+Changelog = "https://github.com/benny-vanbelle-vandeput-be/django-db2-for-i-triggers/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+test = ["pytest>=9", "pytest-django>=4.11"]
+lint = ["ruff>=0.15"]
+dev = [{ include-group = "test" }, { include-group = "lint" }]
+
+[tool.hatch.version]
+path = "django_db2_for_i_triggers/__init__.py"
+
+# The backend is a git dependency until it is on PyPI.
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+include = ["django_db2_for_i_triggers", "tests", "LICENSE", "README.md", "CHANGELOG.md"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["django_db2_for_i_triggers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+DJANGO_SETTINGS_MODULE = "tests.django_settings.settings_offline"
+django_find_project = false
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+markers = [
+    "offline: no IBM i needed; never opens a database connection",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# "Python × Django" (a version combination) in docs and their tests.
+allowed-confusables = ["×"]
