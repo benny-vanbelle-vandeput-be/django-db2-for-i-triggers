@@ -9,6 +9,7 @@ does it for PostgreSQL:
 ```python
 import django_db2_for_i_triggers
 
+
 class Order(models.Model):
     status = models.CharField(max_length=10)
 
@@ -63,10 +64,12 @@ class Order(models.Model):
 
 ## 2. Working rules (read first)
 
-These are the backend's rules, unchanged unless stated. In phase 0 they are
-written into this repository's `CONTRIBUTING.md` and `docs/WORKFLOW.md`, which
-this file then imports (`@CONTRIBUTING.md`, `@docs/WORKFLOW.md`), as the
-backend's CLAUDE.md does.
+These are the backend's rules, unchanged unless stated. They are written into
+this repository's `CONTRIBUTING.md` and `docs/WORKFLOW.md`, imported here as
+the backend's CLAUDE.md does:
+
+@CONTRIBUTING.md
+@docs/WORKFLOW.md
 
 ### Process
 - **Plan before code.** For every phase: propose a plan, wait for approval,

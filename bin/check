@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# bin/check: what CI does, locally, in the container. Never connects to an IBM i.
+#
+#   bin/check                              everything, every Python x Django combination
+#   bin/check --django 6.1                 one Django version, every Python
+#   bin/check --python 3.14 --django 6.1   one combination
+#   bin/check --dry-run                    print the commands, run nothing
+#   bin/check --help
+#
+# Runs lint and the offline tests (nox -s lint offline), which include the
+# check of the changelog fragments. Adapted from django-db2-for-i (bin/check),
+# without its replay tests, verification gate and classification: they come
+# with the golden files and the IBM i tests.
+#
+# Exit codes: 0 all passed; 1 lint or offline tests failed. (Exit code 3,
+# "only the verification gate failed", returns with the gate.)
+
+source "$(dirname "$0")/_common.sh"
+common_args "$@"
+
+python= django=
+set -- ${ARGS[@]+"${ARGS[@]}"}
+while [ $# -gt 0 ]; do
+    case $1 in
+        --python) python=${2:?--python needs a version}; shift 2 ;;
+        --django) django=${2:?--django needs a version}; shift 2 ;;
+        *) die "unknown argument: $1 (see --help)" ;;
+    esac
+done
+
+sessions=(lint)
+found=0
+while read -r p d; do
+    if [ -n "$python" ] && [ "$p" != "$python" ]; then continue; fi
+    if [ -n "$django" ] && [ "$d" != "$django" ]; then continue; fi
+    sessions+=("offline($p-django$d)")
+    found=1
+done < <(nox_combinations)
+[ "$found" = 1 ] || die "no combination for --python '${python}' --django '${django}' in noxfile.py"
+
+container nox -s "${sessions[@]}" || exit 1

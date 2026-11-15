@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# bin/doctor: check the development environment. Never connects to an IBM i.
+#
+#   bin/doctor              every check
+#   bin/doctor --dry-run    print the commands, run nothing
+#   bin/doctor --help
+#
+# Checks: Docker answers; the tests image has the IBM i Access ODBC Driver;
+# .env exists (it is never read or printed here); the PUB400 lock is free or
+# who holds it. Exit code 1 if a check failed. Adapted from django-db2-for-i
+# (bin/doctor), without its test connection: there is no IBM i test system
+# yet (docs/IBMI_NOTES.md); a probe (bin/probe) is the connection check.
+
+source "$(dirname "$0")/_common.sh"
+common_args "$@"
+[ "${#ARGS[@]}" = 0 ] || die "unknown argument: ${ARGS[0]} (see --help)"
+
+failed=0
+result() { # <ok|FAIL> <what>; a dry run shows the commands only
+    [ "$DRY_RUN" = 0 ] || return 0
+    printf '%-4s %s\n' "$1" "$2"
+    [ "$1" = ok ] || failed=1
+}
+
+if run docker info >/dev/null 2>&1; then result ok "Docker answers"; else result FAIL "Docker does not answer: start Docker Desktop"; fi
+
+if [ "$DRY_RUN" = 1 ]; then
+    container odbcinst -q -d
+elif container odbcinst -q -d 2>/dev/null | grep -q "IBM i Access ODBC Driver"; then
+    result ok "the tests image has the IBM i Access ODBC Driver"
+else
+    result FAIL "no IBM i Access ODBC Driver in the tests image: bin/setup (or docker compose build tests)"
+fi
+
+if [ -e "$ROOT/.env" ]; then
+    result ok ".env exists (not read here)"
+else
+    result FAIL ".env is missing: bin/setup, in your own terminal"
+fi
+
+if [ "$DRY_RUN" = 1 ]; then
+    run python3 "$ROOT/scripts/pub400_lock.py" --status
+else
+    echo "     $(python3 "$ROOT/scripts/pub400_lock.py" --status 2>&1 | head -n 1)"
+fi
+exit "$failed"

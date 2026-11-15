@@ -2,8 +2,9 @@
 
 Run inside the container:  docker compose run --rm tests nox -s <session>
 
-For now only the probe sessions (phase 0); the offline and IBM i test sessions
-come with the package skeleton. Adapted from django-db2-for-i (noxfile.py).
+lint and the offline tests (every Python x Django combination), and the probe
+sessions. No IBM i test session yet: PUB400 does not allow CREATE TRIGGER
+(docs/IBMI_NOTES.md). Adapted from django-db2-for-i (noxfile.py).
 """
 
 import pathlib
@@ -13,7 +14,7 @@ import nox
 
 nox.options.default_venv_backend = "uv"
 nox.options.error_on_missing_interpreters = True
-nox.options.sessions = []
+nox.options.sessions = ["lint", "offline"]
 
 # Python versions supported by each Django version, oldest first (the
 # backend's docs/DJANGO_VERSIONS.md).
@@ -25,8 +26,48 @@ DJANGO_PYTHONS = {
 NEWEST_DJANGO = "6.1"
 NEWEST_PYTHON = DJANGO_PYTHONS[NEWEST_DJANGO][-1]
 
+OFFLINE_MATRIX = [
+    (python, django) for django, pythons in DJANGO_PYTHONS.items() for python in pythons
+]
+
 # The probes talk to the driver directly; they need nothing else.
 PROBE_REQUIREMENTS = ["pyodbc>=5.3"]
+
+
+def install_groups(session: nox.Session, *groups: str) -> None:
+    """Dependency groups (the dev and test tooling) at the versions pinned in
+    uv.lock. --locked fails when pyproject.toml changed without `uv lock`.
+    Django is not taken from the lock: the sessions install the newest
+    release of each supported version, the one users get."""
+    requirements = f"{session.virtualenv.location}/requirements-{'-'.join(groups)}.txt"
+    only = [option for group in groups for option in ("--only-group", group)]
+    session.run(
+        "uv", "export", "--locked", "--no-emit-project", "--no-hashes", "--quiet",
+        *only, "--output-file", requirements,
+        external=True,
+    )  # fmt: skip
+    session.install("-r", requirements)
+
+
+@nox.session(python=NEWEST_PYTHON)
+def lint(session: nox.Session) -> None:
+    """Static checks: ruff lint and format check."""
+    install_groups(session, "lint")
+    session.run("ruff", "check", ".")
+    session.run("ruff", "format", "--check", ".")
+
+
+@nox.session
+@nox.parametrize(
+    "python,django",
+    OFFLINE_MATRIX,
+    ids=[f"{python}-django{django}" for python, django in OFFLINE_MATRIX],
+)
+def offline(session: nox.Session, django: str) -> None:
+    """The offline tests: no IBM i. Every Python x every Django version."""
+    install_groups(session, "test")
+    session.install("-e", ".", f"Django~={django}.0")
+    session.run("pytest", "-m", "offline", *session.posargs)
 
 
 def _probe(session: nox.Session, prefix: str) -> tuple[str, list[str]]:
