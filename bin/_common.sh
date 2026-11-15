@@ -12,6 +12,7 @@
 #   environment, never written to a config file, never '*').
 # - pub400 runs a PUB400 nox session through scripts/pub400.sh, which holds
 #   the PUB400 lock (one PUB400 job at a time on this machine).
+# - nox_combinations lists the Python x Django combinations of the noxfile.
 #
 # No secrets: the scripts never read, source or print .env; docker compose
 # loads it into the container itself. Written for bash 3.2 (macOS).
@@ -76,4 +77,22 @@ container() {
 
 pub400() {
     run "$ROOT/scripts/pub400.sh" "$@"
+}
+
+# The Python x Django combinations of the noxfile (DJANGO_PYTHONS), one
+# "<python> <django>" per line, so the scripts keep no second list.
+nox_combinations() {
+    python3 - "$ROOT/noxfile.py" <<'PY'
+import ast
+import sys
+
+tree = ast.parse(open(sys.argv[1]).read())
+for node in tree.body:
+    if isinstance(node, ast.Assign) and any(
+        isinstance(t, ast.Name) and t.id == "DJANGO_PYTHONS" for t in node.targets
+    ):
+        for django, pythons in ast.literal_eval(node.value).items():
+            for python in pythons:
+                print(python, django)
+PY
 }
